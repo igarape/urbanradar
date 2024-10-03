@@ -10,31 +10,51 @@ services:
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
   
-  postgres:
-    image: postgres
-    environment:
-      - POSTGRES_PASSWORD=postgres
-      - POSTGRES_USER=postgres
-      - POSTGRES_DB=postgres
+
+  db:
+    build:
+      context: ./database
+      dockerfile: Dockerfile
+    image: postgres-db
+    restart: unless-stopped
+    ports:
+      - 5432:5432
+    env_file:
+      - ./database/.env
+    container_name: database-urbanmap
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 10s
+      retries: 5
+      start_period: 30s
+      timeout: 5s
+    # uncomment this to insert custom sql (use database init-schema.sql)
+    # volumes:
+    #   - ./database/init-schema.sql:/docker-entrypoint-initdb.d/init-schema.sql
 
   user-interface:
     build: ./user-interface
-    expose:
-      - 3000
+    env_file:
+      - ./user-interface/.env
+    # volumes:
+    #   - ./user-interface:/frontend
     ports:
-      - 3000:3000
+      - "3000:3000"
     labels:
       - traefik.enable=true
       - traefik.http.routers.userinterface.entrypoints=web
       - traefik.http.middlewares.stripprefix-auth.stripprefix.prefixes=/ui
       - traefik.http.routers.userinterface.rule=PathPrefix(`/ui`)
       - traefik.http.routers.userinterface.middlewares=stripprefix-auth@docker
+    command: make account start
     container_name: user-interface
   
   core-api:
     build: ./core-api
-    environment:
-      - SQLALCHEMY_DATABASE_URI=database
+    env_file:
+      - ./core-api/.env
+    volumes:
+      - ./core-api:/app
     expose:
       - 8000
     labels:
@@ -43,17 +63,9 @@ services:
       - traefik.http.middlewares.stripprefix-core.stripprefix.prefixes=/core
       - traefik.http.routers.coreservice.rule=PathPrefix(`/core`)
       - traefik.http.routers.coreservice.middlewares=stripprefix-core@docker
+    command: make migrate fixture start
     depends_on:
-      - postgres
+      db:
+        condition: service_healthy
     ports:
       - 8000:8000
-
-  # migrate:
-  #   build: ./core-api
-  #   environment:
-  #     - SQLALCHEMY_DATABASE_URI=database
-  #   command: flask db upgrade
-  #   depends_on:
-  #     - postgres
-  #     - core-api
-    

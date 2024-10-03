@@ -7,7 +7,7 @@ class Role(db.Model):
     __tablename__ = 'Role'
     __table_args__ = ({'schema': 'web'})
     id = db.Column("id", db.Integer, primary_key=True, autoincrement=False)
-    name = db.Column(db.String)
+    name = db.Column(db.String, unique=True)
     default = db.Column(db.Boolean)
     last_update = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
     creation_date = db.Column(db.DateTime, default=datetime.utcnow)
